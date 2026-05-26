@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: us-east-2
   ECR_REPOSITORY: carpultec-api
-  ECS_CLUSTER: carpultec-cluster
-  ECS_SERVICE: carpultec-service
+  ECS_CLUSTER: carpultec-api
+  ECS_SERVICE: backend-task
   ECS_TASK_DEFINITION: aws/ecs-task-definition.json
   CONTAINER_NAME: backend-task
 
@@ -30,7 +30,9 @@ jobs:
           cache: maven
 
       - name: Run tests
-        run: ./mvnw -B test
+        run: |
+          chmod +x mvnw
+          ./mvnw -B test
 
   deploy:
     name: Deploy

@@ -4,12 +4,12 @@
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
   "memory": "1024",
-  "executionRoleArn": "arn:aws:iam::476003490631:role/LabRole",
-  "taskRoleArn": "arn:aws:iam::476003490631:role/LabRole",
+  "executionRoleArn": "arn:aws:iam::375170594920:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::375170594920:role/carpultec-api-task-role",
   "containerDefinitions": [
     {
       "name": "backend-task",
-      "image": "476003490631.dkr.ecr.us-east-1.amazonaws.com/carpultec-api:latest",
+      "image": "375170594920.dkr.ecr.us-east-2.amazonaws.com/carpultec-api:latest",
       "essential": true,
       "portMappings": [
         {
@@ -30,20 +30,48 @@
         {
           "name": "JAVA_OPTS",
           "value": "-XX:MaxRAMPercentage=75"
+        },
+        {
+          "name": "GOOGLE_MAPS_BASE_URL",
+          "value": "https://maps.googleapis.com/maps/api"
+        },
+        {
+          "name": "APP_JWT_EXPIRATION_MS",
+          "value": "86400000"
+        },
+        {
+          "name": "APP_JWT_REFRESH_EXPIRATION_MS",
+          "value": "604800000"
         }
       ],
       "secrets": [
         {
           "name": "SPRING_DATASOURCE_URL",
-          "valueFrom": "arn:aws:ssm:us-east-1:476003490631:parameter/carpultec/prod/spring-datasource-url"
+          "valueFrom": "arn:aws:ssm:us-east-2:375170594920:parameter/carpultec/prod/spring-datasource-url"
         },
         {
           "name": "SPRING_DATASOURCE_USERNAME",
-          "valueFrom": "arn:aws:ssm:us-east-1:476003490631:parameter/carpultec/prod/spring-datasource-username"
+          "valueFrom": "arn:aws:ssm:us-east-2:375170594920:parameter/carpultec/prod/spring-datasource-username"
         },
         {
           "name": "SPRING_DATASOURCE_PASSWORD",
-          "valueFrom": "arn:aws:ssm:us-east-1:476003490631:parameter/carpultec/prod/spring-datasource-password"
+          "valueFrom": "arn:aws:ssm:us-east-2:375170594920:parameter/carpultec/prod/spring-datasource-password"
+        },
+        {
+          "name": "GOOGLE_MAPS_API_KEY",
+          "valueFrom": "arn:aws:ssm:us-east-2:375170594920:parameter/carpultec/prod/google-maps-api-key"
+        },
+        {
+          "name": "APP_JWT_SECRET",
+          "valueFrom": "arn:aws:ssm:us-east-2:375170594920:parameter/carpultec/prod/jwt-secret"
+        },
+        {
+          "name": "APP_MAIL_FROM",
+          "valueFrom": "arn:aws:ssm:us-east-2:375170594920:parameter/carpultec/prod/mail-from"
+        },
+        {
+          "name": "CORS_ORIGINS",
+          "valueFrom": "arn:aws:ssm:us-east-2:375170594920:parameter/carpultec/prod/cors-origins"
         }
       ],
       "healthCheck": {
@@ -57,7 +85,7 @@
         "logDriver": "awslogs",
         "options": {
           "awslogs-group": "/ecs/backend-task",
-          "awslogs-region": "us-east-1",
+          "awslogs-region": "us-east-2",
           "awslogs-stream-prefix": "ecs"
         }
       }
