@@ -1,22 +1,24 @@
 package com.dbp.democarpultec.controller;
 
 import com.dbp.democarpultec.dto.PublicationRequestDto;
-import com.dbp.democarpultec.dto.PublicationResponseDto;
-import com.dbp.democarpultec.service.PublicationService;
+import com.dbp.democarpultec.model.Publication;
+import com.dbp.democarpultec.model.User;
+import com.dbp.democarpultec.repository.PublicationRepository;
+import com.dbp.democarpultec.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -24,9 +26,10 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(PublicationController.class)
+@SpringBootTest
 @AutoConfigureMockMvc(addFilters = false)
 public class PublicationControllerTest {
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -34,7 +37,10 @@ public class PublicationControllerTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private PublicationService publicationService;
+    private PublicationRepository publicationRepository;
+
+    @MockitoBean
+    private UserRepository userRepository;
 
     @BeforeEach
     void setUp() {
@@ -43,8 +49,17 @@ public class PublicationControllerTest {
 
     private final LocalDateTime departureTime = LocalDateTime.of(2025, 6, 1, 7, 30);
 
-    private PublicationResponseDto buildResponse() {
-        return PublicationResponseDto.builder()
+    private User buildAuthor() {
+        return User.builder()
+                .id(1L)
+                .name("Juan")
+                .lastName("Perez")
+                .email("juan@test.com")
+                .build();
+    }
+
+    private Publication buildPublication() {
+        return Publication.builder()
                 .id(1L)
                 .fromUTEC(true)
                 .driverToPassenger(true)
@@ -53,8 +68,7 @@ public class PublicationControllerTest {
                 .descripcion("Salgo puntual")
                 .destinationOrOrigin("Miraflores")
                 .departureTime(departureTime)
-                .authorId(1L)
-                .rideId(null)
+                .author(buildAuthor())
                 .build();
     }
 
@@ -73,7 +87,7 @@ public class PublicationControllerTest {
 
     @Test
     void shouldReturnAllPublicationsWhenPublicationsExist() throws Exception {
-        when(publicationService.findAll()).thenReturn(List.of(buildResponse()));
+        when(publicationRepository.findAll()).thenReturn(List.of(buildPublication()));
 
         mockMvc.perform(get("/api/publications"))
                 .andExpect(status().isOk())
@@ -81,12 +95,12 @@ public class PublicationControllerTest {
                 .andExpect(jsonPath("$[0].titulo").value("Viaje a Miraflores"))
                 .andExpect(jsonPath("$[0].seats").value(3));
 
-        verify(publicationService).findAll();
+        verify(publicationRepository).findAll();
     }
 
     @Test
     void shouldReturnEmptyListWhenNoPublicationsExist() throws Exception {
-        when(publicationService.findAll()).thenReturn(List.of());
+        when(publicationRepository.findAll()).thenReturn(List.of());
 
         mockMvc.perform(get("/api/publications"))
                 .andExpect(status().isOk())
@@ -95,7 +109,7 @@ public class PublicationControllerTest {
 
     @Test
     void shouldReturnPublicationWhenIdExists() throws Exception {
-        when(publicationService.findById(1L)).thenReturn(buildResponse());
+        when(publicationRepository.findById(1L)).thenReturn(Optional.of(buildPublication()));
 
         mockMvc.perform(get("/api/publications/1"))
                 .andExpect(status().isOk())
@@ -104,22 +118,23 @@ public class PublicationControllerTest {
                 .andExpect(jsonPath("$.fromUTEC").value(true))
                 .andExpect(jsonPath("$.authorId").value(1));
 
-        verify(publicationService).findById(1L);
+        verify(publicationRepository).findById(1L);
     }
 
     @Test
     void shouldReturn404WhenPublicationNotFound() throws Exception {
-        when(publicationService.findById(99L)).thenThrow(new EntityNotFoundException("Publication not found with id 99"));
+        when(publicationRepository.findById(99L)).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/publications/99"))
                 .andExpect(status().isNotFound());
 
-        verify(publicationService).findById(99L);
+        verify(publicationRepository).findById(99L);
     }
 
     @Test
     void shouldCreatePublicationWhenValidRequest() throws Exception {
-        when(publicationService.create(any(PublicationRequestDto.class))).thenReturn(buildResponse());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(buildAuthor()));
+        when(publicationRepository.save(any(Publication.class))).thenReturn(buildPublication());
 
         mockMvc.perform(post("/api/publications")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -129,7 +144,7 @@ public class PublicationControllerTest {
                 .andExpect(jsonPath("$.titulo").value("Viaje a Miraflores"))
                 .andExpect(jsonPath("$.driverToPassenger").value(true));
 
-        verify(publicationService).create(any(PublicationRequestDto.class));
+        verify(publicationRepository).save(any(Publication.class));
     }
 
     @Test
@@ -149,7 +164,7 @@ public class PublicationControllerTest {
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
 
-        verify(publicationService, never()).create(any());
+        verify(publicationRepository, never()).save(any());
     }
 
     @Test
@@ -169,7 +184,7 @@ public class PublicationControllerTest {
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
 
-        verify(publicationService, never()).create(any());
+        verify(publicationRepository, never()).save(any());
     }
 
     @Test
@@ -184,12 +199,12 @@ public class PublicationControllerTest {
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
 
-        verify(publicationService, never()).create(any());
+        verify(publicationRepository, never()).save(any());
     }
 
     @Test
     void shouldUpdatePublicationWhenValidRequest() throws Exception {
-        PublicationResponseDto updated = PublicationResponseDto.builder()
+        Publication updated = Publication.builder()
                 .id(1L)
                 .fromUTEC(false)
                 .driverToPassenger(false)
@@ -198,10 +213,12 @@ public class PublicationControllerTest {
                 .descripcion("Recojo en Surco")
                 .destinationOrOrigin("Surco")
                 .departureTime(departureTime)
-                .authorId(1L)
+                .author(buildAuthor())
                 .build();
 
-        when(publicationService.update(eq(1L), any(PublicationRequestDto.class))).thenReturn(updated);
+        when(publicationRepository.findById(1L)).thenReturn(Optional.of(buildPublication()));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(buildAuthor()));
+        when(publicationRepository.save(any(Publication.class))).thenReturn(updated);
 
         PublicationRequestDto req = PublicationRequestDto.builder()
                 .fromUTEC(false)
@@ -222,38 +239,39 @@ public class PublicationControllerTest {
                 .andExpect(jsonPath("$.fromUTEC").value(false))
                 .andExpect(jsonPath("$.seats").value(2));
 
-        verify(publicationService).update(eq(1L), any(PublicationRequestDto.class));
+        verify(publicationRepository).save(any(Publication.class));
     }
 
     @Test
     void shouldReturn404WhenUpdatingNonExistentPublication() throws Exception {
-        when(publicationService.update(eq(99L), any(PublicationRequestDto.class))).thenThrow(new EntityNotFoundException("Publication not found with id 99"));
+        when(publicationRepository.findById(99L)).thenReturn(Optional.empty());
 
         mockMvc.perform(put("/api/publications/99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(buildRequest())))
                 .andExpect(status().isNotFound());
 
-        verify(publicationService).update(eq(99L), any(PublicationRequestDto.class));
+        verify(publicationRepository).findById(99L);
     }
 
     @Test
     void shouldDeletePublicationWhenIdExists() throws Exception {
-        doNothing().when(publicationService).delete(1L);
+        when(publicationRepository.existsById(1L)).thenReturn(true);
+        doNothing().when(publicationRepository).deleteById(1L);
 
         mockMvc.perform(delete("/api/publications/1"))
                 .andExpect(status().isNoContent());
 
-        verify(publicationService).delete(1L);
+        verify(publicationRepository).deleteById(1L);
     }
 
     @Test
     void shouldReturn404WhenDeletingNonExistentPublication() throws Exception {
-        doThrow(new EntityNotFoundException("Publication not found with id 99")).when(publicationService).delete(99L);
+        when(publicationRepository.existsById(99L)).thenReturn(false);
 
         mockMvc.perform(delete("/api/publications/99"))
                 .andExpect(status().isNotFound());
 
-        verify(publicationService).delete(99L);
+        verify(publicationRepository).existsById(99L);
     }
 }

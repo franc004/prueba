@@ -1,22 +1,26 @@
 package com.dbp.democarpultec.controller;
 
 import com.dbp.democarpultec.dto.RequestPublicationRequestDto;
-import com.dbp.democarpultec.dto.RequestPublicationResponseDto;
-import com.dbp.democarpultec.service.RequestPublicationService;
+import com.dbp.democarpultec.model.Publication;
+import com.dbp.democarpultec.model.RequestPublication;
+import com.dbp.democarpultec.model.User;
+import com.dbp.democarpultec.repository.PublicationRepository;
+import com.dbp.democarpultec.repository.RequestPublicationRepository;
+import com.dbp.democarpultec.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -24,9 +28,10 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(RequestPublicationController.class)
+@SpringBootTest
 @AutoConfigureMockMvc(addFilters = false)
 public class RequestPublicationControllerTest {
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -34,7 +39,13 @@ public class RequestPublicationControllerTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private RequestPublicationService requestPublicationService;
+    private RequestPublicationRepository requestPublicationRepository;
+
+    @MockitoBean
+    private PublicationRepository publicationRepository;
+
+    @MockitoBean
+    private UserRepository userRepository;
 
     @BeforeEach
     void setUp() {
@@ -43,11 +54,27 @@ public class RequestPublicationControllerTest {
 
     private final LocalDateTime createdAt = LocalDateTime.of(2025, 6, 1, 9, 0);
 
-    private RequestPublicationResponseDto buildResponse() {
-        return RequestPublicationResponseDto.builder()
+    private User buildRequester() {
+        return User.builder()
+                .id(2L)
+                .name("Maria")
+                .lastName("Garcia")
+                .email("maria@test.com")
+                .build();
+    }
+
+    private Publication buildPublication() {
+        return Publication.builder()
                 .id(1L)
-                .publicationId(1L)
-                .requesterId(2L)
+                .author(User.builder().id(1L).name("Juan").lastName("Perez").email("juan@test.com").build())
+                .build();
+    }
+
+    private RequestPublication buildRequestPublication() {
+        return RequestPublication.builder()
+                .id(1L)
+                .publication(buildPublication())
+                .requester(buildRequester())
                 .requesterIsDriver(false)
                 .seats(2)
                 .message("Me interesa el viaje")
@@ -70,7 +97,7 @@ public class RequestPublicationControllerTest {
 
     @Test
     void shouldReturnAllRequestPublicationsWhenRequestsExist() throws Exception {
-        when(requestPublicationService.findAll()).thenReturn(List.of(buildResponse()));
+        when(requestPublicationRepository.findAll()).thenReturn(List.of(buildRequestPublication()));
 
         mockMvc.perform(get("/api/request-publications"))
                 .andExpect(status().isOk())
@@ -78,12 +105,12 @@ public class RequestPublicationControllerTest {
                 .andExpect(jsonPath("$[0].status").value("pending"))
                 .andExpect(jsonPath("$[0].seats").value(2));
 
-        verify(requestPublicationService).findAll();
+        verify(requestPublicationRepository).findAll();
     }
 
     @Test
     void shouldReturnEmptyListWhenNoRequestPublicationsExist() throws Exception {
-        when(requestPublicationService.findAll()).thenReturn(List.of());
+        when(requestPublicationRepository.findAll()).thenReturn(List.of());
 
         mockMvc.perform(get("/api/request-publications"))
                 .andExpect(status().isOk())
@@ -92,7 +119,7 @@ public class RequestPublicationControllerTest {
 
     @Test
     void shouldReturnRequestPublicationWhenIdExists() throws Exception {
-        when(requestPublicationService.findById(1L)).thenReturn(buildResponse());
+        when(requestPublicationRepository.findById(1L)).thenReturn(Optional.of(buildRequestPublication()));
 
         mockMvc.perform(get("/api/request-publications/1"))
                 .andExpect(status().isOk())
@@ -101,22 +128,24 @@ public class RequestPublicationControllerTest {
                 .andExpect(jsonPath("$.status").value("pending"))
                 .andExpect(jsonPath("$.requesterIsDriver").value(false));
 
-        verify(requestPublicationService).findById(1L);
+        verify(requestPublicationRepository).findById(1L);
     }
 
     @Test
     void shouldReturn404WhenRequestPublicationNotFound() throws Exception {
-        when(requestPublicationService.findById(99L)).thenThrow(new EntityNotFoundException("RequestPublication not found with id 99"));
+        when(requestPublicationRepository.findById(99L)).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/request-publications/99"))
                 .andExpect(status().isNotFound());
 
-        verify(requestPublicationService).findById(99L);
+        verify(requestPublicationRepository).findById(99L);
     }
 
     @Test
     void shouldCreateRequestPublicationWhenValidRequest() throws Exception {
-        when(requestPublicationService.create(any(RequestPublicationRequestDto.class))).thenReturn(buildResponse());
+        when(publicationRepository.findById(1L)).thenReturn(Optional.of(buildPublication()));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(buildRequester()));
+        when(requestPublicationRepository.save(any(RequestPublication.class))).thenReturn(buildRequestPublication());
 
         mockMvc.perform(post("/api/request-publications")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -126,7 +155,7 @@ public class RequestPublicationControllerTest {
                 .andExpect(jsonPath("$.status").value("pending"))
                 .andExpect(jsonPath("$.message").value("Me interesa el viaje"));
 
-        verify(requestPublicationService).create(any(RequestPublicationRequestDto.class));
+        verify(requestPublicationRepository).save(any(RequestPublication.class));
     }
 
     @Test
@@ -143,7 +172,7 @@ public class RequestPublicationControllerTest {
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
 
-        verify(requestPublicationService, never()).create(any());
+        verify(requestPublicationRepository, never()).save(any());
     }
 
     @Test
@@ -157,15 +186,15 @@ public class RequestPublicationControllerTest {
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
 
-        verify(requestPublicationService, never()).create(any());
+        verify(requestPublicationRepository, never()).save(any());
     }
 
     @Test
     void shouldUpdateRequestPublicationWhenValidRequest() throws Exception {
-        RequestPublicationResponseDto updated = RequestPublicationResponseDto.builder()
+        RequestPublication updated = RequestPublication.builder()
                 .id(1L)
-                .publicationId(1L)
-                .requesterId(2L)
+                .publication(buildPublication())
+                .requester(buildRequester())
                 .requesterIsDriver(false)
                 .seats(1)
                 .message("Actualizo mi solicitud")
@@ -174,7 +203,10 @@ public class RequestPublicationControllerTest {
                 .createdAt(createdAt)
                 .build();
 
-        when(requestPublicationService.update(eq(1L), any(RequestPublicationRequestDto.class))).thenReturn(updated);
+        when(requestPublicationRepository.findById(1L)).thenReturn(Optional.of(buildRequestPublication()));
+        when(publicationRepository.findById(1L)).thenReturn(Optional.of(buildPublication()));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(buildRequester()));
+        when(requestPublicationRepository.save(any(RequestPublication.class))).thenReturn(updated);
 
         RequestPublicationRequestDto req = RequestPublicationRequestDto.builder()
                 .publicationId(1L)
@@ -194,38 +226,39 @@ public class RequestPublicationControllerTest {
                 .andExpect(jsonPath("$.seats").value(1))
                 .andExpect(jsonPath("$.pickupPointOrDestine").value("Av. Benavides 500"));
 
-        verify(requestPublicationService).update(eq(1L), any(RequestPublicationRequestDto.class));
+        verify(requestPublicationRepository).save(any(RequestPublication.class));
     }
 
     @Test
     void shouldReturn404WhenUpdatingNonExistentRequestPublication() throws Exception {
-        when(requestPublicationService.update(eq(99L), any(RequestPublicationRequestDto.class))).thenThrow(new EntityNotFoundException("RequestPublication not found with id 99"));
+        when(requestPublicationRepository.findById(99L)).thenReturn(Optional.empty());
 
         mockMvc.perform(put("/api/request-publications/99")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(buildRequest())))
                 .andExpect(status().isNotFound());
 
-        verify(requestPublicationService).update(eq(99L), any(RequestPublicationRequestDto.class));
+        verify(requestPublicationRepository).findById(99L);
     }
 
     @Test
     void shouldDeleteRequestPublicationWhenIdExists() throws Exception {
-        doNothing().when(requestPublicationService).delete(1L);
+        when(requestPublicationRepository.existsById(1L)).thenReturn(true);
+        doNothing().when(requestPublicationRepository).deleteById(1L);
 
         mockMvc.perform(delete("/api/request-publications/1"))
                 .andExpect(status().isNoContent());
 
-        verify(requestPublicationService).delete(1L);
+        verify(requestPublicationRepository).deleteById(1L);
     }
 
     @Test
     void shouldReturn404WhenDeletingNonExistentRequestPublication() throws Exception {
-        doThrow(new EntityNotFoundException("RequestPublication not found with id 99")).when(requestPublicationService).delete(99L);
+        when(requestPublicationRepository.existsById(99L)).thenReturn(false);
 
         mockMvc.perform(delete("/api/request-publications/99"))
                 .andExpect(status().isNotFound());
 
-        verify(requestPublicationService).delete(99L);
+        verify(requestPublicationRepository).existsById(99L);
     }
 }

@@ -1,20 +1,21 @@
 package com.dbp.democarpultec.controller;
 
 import com.dbp.democarpultec.dto.UserRequestDto;
-import com.dbp.democarpultec.dto.UserResponseDto;
+import com.dbp.democarpultec.model.User;
 import com.dbp.democarpultec.model.enums.Carreras;
-import com.dbp.democarpultec.service.UserService;
+import com.dbp.democarpultec.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -22,9 +23,10 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(UserController.class)
+@SpringBootTest
 @AutoConfigureMockMvc(addFilters = false)
 public class UserControllerTest {
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -32,10 +34,10 @@ public class UserControllerTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private UserService userService;
+    private UserRepository userRepository;
 
-    private UserResponseDto buildResponse(){
-        return UserResponseDto.builder()
+    private User buildUser() {
+        return User.builder()
                 .id(1L)
                 .name("Juan")
                 .lastName("Perez")
@@ -48,7 +50,7 @@ public class UserControllerTest {
                 .build();
     }
 
-    private UserRequestDto buildRequest(){
+    private UserRequestDto buildRequest() {
         return UserRequestDto.builder()
                 .name("Juan")
                 .lastName("Perez")
@@ -63,7 +65,7 @@ public class UserControllerTest {
 
     @Test
     void shouldReturnAllUsersWhenUsersExist() throws Exception {
-        when(userService.findAll()).thenReturn(List.of(buildResponse()));
+        when(userRepository.findAll()).thenReturn(List.of(buildUser()));
 
         mockMvc.perform(get("/api/users"))
                 .andExpect(status().isOk())
@@ -71,12 +73,12 @@ public class UserControllerTest {
                 .andExpect(jsonPath("$[0].name").value("Juan"))
                 .andExpect(jsonPath("$[0].email").value("juan@test.com"));
 
-        verify(userService).findAll();
+        verify(userRepository).findAll();
     }
 
     @Test
     void shouldReturnEmptyListWhenNoUsersExist() throws Exception {
-        when(userService.findAll()).thenReturn(List.of());
+        when(userRepository.findAll()).thenReturn(List.of());
 
         mockMvc.perform(get("/api/users"))
                 .andExpect(status().isOk())
@@ -85,7 +87,7 @@ public class UserControllerTest {
 
     @Test
     void shouldReturnUserWhenIdExists() throws Exception {
-        when(userService.findById(1L)).thenReturn(buildResponse());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(buildUser()));
 
         mockMvc.perform(get("/api/users/1"))
                 .andExpect(status().isOk())
@@ -93,22 +95,22 @@ public class UserControllerTest {
                 .andExpect(jsonPath("$.name").value("Juan"))
                 .andExpect(jsonPath("$.rating").value(4.5));
 
-        verify(userService).findById(1L);
+        verify(userRepository).findById(1L);
     }
 
     @Test
     void shouldReturn404WhenUserNotFound() throws Exception {
-        when(userService.findById(99L)).thenThrow(new EntityNotFoundException("User not found with id 99"));
+        when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/users/99"))
                 .andExpect(status().isNotFound());
 
-        verify(userService).findById(99L);
+        verify(userRepository).findById(99L);
     }
 
     @Test
     void shouldCreateUserWhenValidRequest() throws Exception {
-        when(userService.create(any(UserRequestDto.class))).thenReturn(buildResponse());
+        when(userRepository.save(any(User.class))).thenReturn(buildUser());
 
         mockMvc.perform(post("/api/users")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -118,7 +120,7 @@ public class UserControllerTest {
                 .andExpect(jsonPath("$.name").value("Juan"))
                 .andExpect(jsonPath("$.email").value("juan@test.com"));
 
-        verify(userService).create(any(UserRequestDto.class));
+        verify(userRepository).save(any(User.class));
     }
 
     @Test
@@ -133,12 +135,12 @@ public class UserControllerTest {
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
 
-        verify(userService, never()).create(any());
+        verify(userRepository, never()).save(any());
     }
 
     @Test
     void shouldUpdateUserWhenValidRequest() throws Exception {
-        UserResponseDto updated = UserResponseDto.builder()
+        User updated = User.builder()
                 .id(1L)
                 .name("Pedro")
                 .lastName("Lopez")
@@ -146,7 +148,8 @@ public class UserControllerTest {
                 .rating(4.0)
                 .build();
 
-        when(userService.update(eq(1L), any(UserRequestDto.class))).thenReturn(updated);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(buildUser()));
+        when(userRepository.save(any(User.class))).thenReturn(updated);
 
         UserRequestDto req = UserRequestDto.builder()
                 .name("Pedro")
@@ -162,12 +165,12 @@ public class UserControllerTest {
                 .andExpect(jsonPath("$.name").value("Pedro"))
                 .andExpect(jsonPath("$.email").value("pedro@test.com"));
 
-        verify(userService).update(eq(1L), any(UserRequestDto.class));
+        verify(userRepository).save(any(User.class));
     }
 
     @Test
     void shouldReturn404WhenUpdatingNonExistentUser() throws Exception {
-        when(userService.update(eq(99L), any(UserRequestDto.class))).thenThrow(new EntityNotFoundException("User not found with id 99"));
+        when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
         mockMvc.perform(put("/api/users/99")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -177,21 +180,22 @@ public class UserControllerTest {
 
     @Test
     void shouldDeleteUserWhenIdExists() throws Exception {
-        doNothing().when(userService).delete(1L);
+        when(userRepository.existsById(1L)).thenReturn(true);
+        doNothing().when(userRepository).deleteById(1L);
 
         mockMvc.perform(delete("/api/users/1"))
                 .andExpect(status().isNoContent());
 
-        verify(userService).delete(1L);
+        verify(userRepository).deleteById(1L);
     }
 
     @Test
     void shouldReturn404WhenDeletingNonExistentUser() throws Exception {
-        doThrow(new EntityNotFoundException("User not found with id 99")).when(userService).delete(99L);
+        when(userRepository.existsById(99L)).thenReturn(false);
 
         mockMvc.perform(delete("/api/users/99"))
                 .andExpect(status().isNotFound());
 
-        verify(userService).delete(99L);
+        verify(userRepository).existsById(99L);
     }
 }
