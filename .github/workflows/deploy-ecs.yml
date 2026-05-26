@@ -52,6 +52,29 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Sync SSM parameters from GitHub Secrets
+        run: |
+          put_param() {
+            local name=$1
+            local value=$2
+            aws ssm put-parameter \
+              --name "$name" \
+              --value "$value" \
+              --type "SecureString" \
+              --overwrite \
+              --region ${{ env.AWS_REGION }} \
+              --no-cli-pager
+            echo "✓ $name"
+          }
+
+          put_param "/carpultec/prod/spring-datasource-url"      "${{ secrets.DB_URL }}"
+          put_param "/carpultec/prod/spring-datasource-username" "${{ secrets.DB_USERNAME }}"
+          put_param "/carpultec/prod/spring-datasource-password" "${{ secrets.DB_PASSWORD }}"
+          put_param "/carpultec/prod/google-maps-api-key"        "${{ secrets.GOOGLE_MAPS_API_KEY }}"
+          put_param "/carpultec/prod/jwt-secret"                 "${{ secrets.JWT_SECRET }}"
+          put_param "/carpultec/prod/mail-from"                  "${{ secrets.MAIL_FROM }}"
+          put_param "/carpultec/prod/cors-origins"               "${{ secrets.CORS_ORIGINS }}"
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
