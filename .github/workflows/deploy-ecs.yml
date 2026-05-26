@@ -9,8 +9,8 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: carpultec-api
-  ECS_CLUSTER: carpultec-api
-  ECS_SERVICE: backend-task
+  ECS_CLUSTER: carpultec-cluster
+  ECS_SERVICE: carpultec-service
   ECS_TASK_DEFINITION: aws/ecs-task-definition.json
   CONTAINER_NAME: backend-task
 
